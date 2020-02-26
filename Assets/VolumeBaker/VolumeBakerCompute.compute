@@ -1,0 +1,162 @@
+﻿// Declare kernels
+#pragma kernel GPU_RenderVolume
+#pragma kernel GPU_Slice
+
+#include "SimplexNoise3D.hlsl"
+
+// 3D Texture for volume data
+RWTexture3D<float> _VoxelTexture;
+
+// 2D Slice storage
+RWTexture2D<float> _SliceTexture;
+
+// Current slice to render
+uniform uint _Slice;
+
+// Voxel cube's one side dimension as an int. 32 x 32 x 32 for example
+uniform uint _VoxelResolution;
+
+// Falloff modifier
+uniform float _FallOff;
+
+// Noise settings
+uniform bool _EnableNoise;
+uniform float _NoiseDensity;
+uniform float _NoiseIntensity;
+
+// Shape toggles
+uniform bool _DrawSphere;
+uniform bool _DrawCylinder;
+uniform bool _DrawCone;
+uniform bool _DrawTorus;
+uniform bool _DrawNoise;
+
+
+// ----------------------------------------------------------------------------
+// SDF Functions, adapted from IQ's
+// Sphere
+float sdSphere( float3 p, float s )
+{
+  return length(p) - s;
+}
+
+
+// Cylinder, capped
+float sdCappedCylinder( float3 p, float h, float r )
+{
+  float2 d = abs(float2( length(p.xz), p.y) ) - float2( h, r );
+  return min( max(d.x, d.y), 0.0) + length(max(d, 0.0) );
+}
+
+
+// Torus - exact
+float sdTorus( float3 p, float2 t )
+{
+  float2 q = float2( length(p.xz) - t.x, p.y );
+  return length(q) - t.y;
+}
+// ----------------------------------------------------------------------------
+
+
+// ----------------------------------------------------------------------------
+// Matrix rotation helpers
+float3x3 rotateX(float angle)
+{
+    float c = cos(angle);
+    float s = sin(angle);
+
+    float3x3 fMatrix =
+    {
+      1, 0, 0,
+      0, c, s,
+      0,-s, c
+    };
+
+    return fMatrix;
+}
+
+
+float3x3 rotateY(float angle)
+{
+    float c = cos(angle);
+    float s = sin(angle);
+
+    float3x3 fMatrix =
+    {
+      c, 0,-s,
+      0, 1, 0,
+      s, 0, c
+    };
+
+    return fMatrix;
+}
+
+
+float3x3 rotateZ(float angle)
+{
+    float c = cos(angle);
+    float s = sin(angle);
+
+    float3x3 fMatrix =
+    {
+      c, s, 0,
+     -s, c, 0,
+      0, 0, 1
+    };
+
+    return fMatrix;
+}
+// ----------------------------------------------------------------------------
+
+
+// ----------------------------------------------------------------------------
+// Kernels
+
+// Volume Renderer
+[numthreads(8, 8, 8)]
+void GPU_RenderVolume (uint3 id : SV_DispatchThreadID)
+{
+    // Calculate center
+    float3 center = float3( _VoxelResolution, _VoxelResolution, _VoxelResolution) / 2;
+
+    // Generate center offset coordinates
+    float3 fID = (id.xyz - center) / _VoxelResolution;
+
+    // Compute distance to selected shape
+    float d = 0;
+    if (_DrawSphere)
+    {
+      d = sdSphere(fID, 0.4);
+    }
+    if (_DrawCylinder)
+    {
+      float3 rotated = mul(fID, rotateZ(radians(90)));
+      d = sdCappedCylinder(rotated, 0.35, 0.5);
+    }
+    if (_DrawTorus)
+    {
+      float3 rotatedZ = mul(fID, rotateZ(radians(0)));
+      d = sdTorus(rotatedZ, float2(0.35, 0.1));
+    }
+
+    // Apply noise if toggled on
+    float n = 0;
+    float intensity = 10;
+    if (_EnableNoise || _DrawNoise)
+    {
+      n = snoise(fID * _NoiseDensity) * _NoiseIntensity;
+      n = saturate(n);
+    }
+
+    // Assign to the texture
+    _VoxelTexture[id] = saturate(1 - d * _FallOff - n);
+}
+
+
+// 2D Slicer
+[numthreads(32,32,1)]
+void GPU_Slice (uint3 id : SV_DispatchThreadID)
+{
+    uint3 pos = uint3(id.x, id.y, _Slice);
+    _SliceTexture[id.xy] = _VoxelTexture[pos.xyz];
+}
