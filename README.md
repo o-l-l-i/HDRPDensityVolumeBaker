@@ -6,7 +6,7 @@ As far as I know HDRP does not currently support rendering of density volume tex
 
 So I thought to check how difficult it would be to create a renderer that produces volume textures in required format, right inside Unity.
 
-The results really don't look that fancy as the resolution isn't that great (32x32x32) and there's some artifacts etc. But these can most likely at least partially hidden with some trickery etc.
+The results really don't look that fancy as the resolution isn't that great (32x32x32) and there's some artifacts etc. But these can most likely be at least partially hidden with some trickery etc.
 
 This is just my proof of concept prototype.
 
