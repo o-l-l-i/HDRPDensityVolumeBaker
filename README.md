@@ -33,3 +33,5 @@ This test project works with Unity 2019.3.0f6 and HDRP 7.1.8.
 ## UI
 
 ![HDRPDensityVolumeBaker UI image](DensityVolumeBaker_UI.png)
+
+© 2020 Olli Sorjonen All Rights Reserved
